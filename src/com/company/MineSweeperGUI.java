@@ -16,8 +16,11 @@ public class MineSweeperGUI extends JFrame implements Runnable, ActionListener, 
     String[] d = new String[22];
     String[] m = new String[496];
     private final Color clr = new Color(132, 167, 176);
+    private final Color clr2 = new Color(30, 120, 180);
     private int dimensions = 0;
     private int numOfMines = 0;
+    private int firstNumOfMines;
+    private final String defaultFileName = "Default Settings.bin";
     final Player player = MineSweeper.player;
     final JFrame frame = new JFrame("MineSweeper by Caesar");
     private final JFrame loadFrame = new JFrame("Loading");
@@ -76,6 +79,22 @@ public class MineSweeperGUI extends JFrame implements Runnable, ActionListener, 
             Thread.sleep(1);
         new MineSweeper(dimensions, numOfMines);
         gridPanel = new JPanel(new GridLayout(dimensions, dimensions, 0, 0));
+        this.firstNumOfMines = numOfMines;
+        preparePanels();
+        prepareFrame();
+        fillGridPanel();
+        initializeFlags();
+        Thread t = new Thread(this);
+        t.start();
+    }
+
+    MineSweeperGUI(int dimens, int minesCount) {
+        this.dimensions = dimens;
+        this.numOfMines = minesCount;
+        this.firstNumOfMines = numOfMines;
+        prepareSounds();
+        new MineSweeper(dimens, minesCount);
+        gridPanel = new JPanel(new GridLayout(dimens, dimens, 0, 0));
         preparePanels();
         prepareFrame();
         fillGridPanel();
@@ -277,7 +296,8 @@ public class MineSweeperGUI extends JFrame implements Runnable, ActionListener, 
     }
 
     @Override
-    public void mouseExited(MouseEvent e) {}
+    public void mouseExited(MouseEvent e) {
+    }
 
     static class FrameBackGround extends Canvas {
         public void paint(Graphics g) {
@@ -518,7 +538,7 @@ public class MineSweeperGUI extends JFrame implements Runnable, ActionListener, 
 
     private void showResult() {
         MineSweeperGUI.fullTime = Timer.time;
-        String[] options = {"New Game", "Exit"};
+        String[] options = {"New Game", "Restart", "Exit"};
         String message = "";
         String hours = String.valueOf(getHours());
         String minutes = String.valueOf(getMinutes());
@@ -528,7 +548,7 @@ public class MineSweeperGUI extends JFrame implements Runnable, ActionListener, 
             message = "                     ----- YOU WIN -----   " + "\nMines:                                                       " + MineSweeper.minesCount + "\n                                    ---" + "\nTime Spent:                                     " + hours + "h " + minutes + "m " + seconds + "s" + "\n                                    ---" + "\nScore:                                                   " + MineSweeper.score;
         else if (MineSweeper.state == GameState.LOSE)
             message = "                     ----- YOU LOSE -----   " + "\nMines:                                                       " + MineSweeper.minesCount + "\n                                    ---" + "\nTime Spent:                                     " + hours + "h " + minutes + "m " + seconds + "s" + "\n                                    ---" + "\nScore:                                                         " + MineSweeper.score;
-        respond = JOptionPane.showOptionDialog(this.frame, message, "Result!", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, 0);
+        respond = JOptionPane.showOptionDialog(this.frame, message, "Result!", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, 0);
         if (respond == 0) {
             try {
                 reset();
@@ -537,6 +557,10 @@ public class MineSweeperGUI extends JFrame implements Runnable, ActionListener, 
             } catch (InterruptedException ex) {
                 ex.printStackTrace();
             }
+        } else if (respond == 1) {
+            reset();
+            this.frame.dispose();
+            new MineSweeperGUI(dimensions, firstNumOfMines);
         } else
             System.exit(0);
     }
@@ -578,16 +602,35 @@ public class MineSweeperGUI extends JFrame implements Runnable, ActionListener, 
         JFrame frame = new JFrame("StartUp");
         frame.setLayout(null);
         frame.setIconImage(icon);
-        frame.setBounds(650, 320, 235, 150);
+        frame.setBounds(650, 320, 260, 180);
         JLabel gridDimensions = new JLabel("Grid Dimensions(nxn): ");
         JComboBox<String> gridDimensionsBox = new JComboBox<>(d);
         JLabel minesCount = new JLabel("Mines: ");
         JComboBox<String> minesBox = new JComboBox<>(m);
-        JButton OK = new JButton("OK");
-        OK.addActionListener(e -> {
+        JButton startButton = new JButton("Start");
+        JButton defaultGame = new JButton("Default Game");
+        JButton setAsDefault = new JButton("Set as Default");
+        JLabel defaultDimensions = new JLabel();
+        JLabel defaultMinesCount = new JLabel();
+
+
+        // setting the default labels text.
+        try {
+            FileInputStream fileInputStream = new FileInputStream(defaultFileName);
+            ObjectInputStream objectInputStream = new ObjectInputStream(fileInputStream);
+            int d = objectInputStream.readInt();
+            int m = objectInputStream.readInt();
+            defaultDimensions.setText(String.valueOf(d));
+            defaultMinesCount.setText(String.valueOf(m));
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(frame, "/'Default Settings.bin/' file does not exist.", "Missing File", JOptionPane.ERROR_MESSAGE, null);
+        }
+
+
+        startButton.addActionListener(e -> {
             numOfMines = Integer.parseInt(String.valueOf(minesBox.getItemAt(minesBox.getSelectedIndex())));
             dimensions = Integer.parseInt(String.valueOf(gridDimensionsBox.getItemAt(gridDimensionsBox.getSelectedIndex())));
-            if (numOfMines >= (dimensions * dimensions) - 4) {
+            if (!isValid(numOfMines, dimensions)) {
                 numOfMines = 0;
                 dimensions = 0;
                 JOptionPane.showMessageDialog(frame, "Too much mines for the entered grid dimensions, change one value at least.", "Incompatible input", JOptionPane.INFORMATION_MESSAGE, null);
@@ -595,7 +638,47 @@ public class MineSweeperGUI extends JFrame implements Runnable, ActionListener, 
             }
             frame.dispose();
         });
-        OK.setBounds(78, 80, 60, 25);
+
+        defaultGame.addActionListener(e -> {
+            try {
+                FileInputStream fileInputStream = new FileInputStream(defaultFileName);
+                ObjectInputStream objectInputStream = new ObjectInputStream(fileInputStream);
+                dimensions = objectInputStream.readInt();
+                numOfMines = objectInputStream.readInt();
+            } catch (IOException ex) {
+                JOptionPane.showMessageDialog(frame, "/'Default Settings.bin/' file does not exist.", "Missing File", JOptionPane.ERROR_MESSAGE, null);
+            }
+            if (!isValid(numOfMines, dimensions)) {
+                numOfMines = 0;
+                dimensions = 0;
+                JOptionPane.showMessageDialog(frame, "Too much mines for the entered grid dimensions, change one value at least.", "Incompatible input", JOptionPane.INFORMATION_MESSAGE, null);
+                return;
+            }
+            frame.dispose();
+        });
+
+        setAsDefault.addActionListener(e -> {
+            try {
+                FileOutputStream fileOutputStream = new FileOutputStream(defaultFileName);
+                ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream);
+                objectOutputStream.writeInt(Integer.parseInt(String.valueOf(gridDimensionsBox.getItemAt(gridDimensionsBox.getSelectedIndex()))));
+                objectOutputStream.writeInt(Integer.parseInt(String.valueOf(minesBox.getItemAt(minesBox.getSelectedIndex()))));
+                objectOutputStream.close();
+            } catch (IOException ioException) {
+                ioException.printStackTrace();
+            }
+            defaultDimensions.setText(gridDimensionsBox.getItemAt(gridDimensionsBox.getSelectedIndex()));
+            defaultMinesCount.setText(minesBox.getItemAt(minesBox.getSelectedIndex()));
+        });
+
+
+        startButton.setBounds(10, 80, 95, 25);
+        defaultGame.setBounds(115, 80, 120, 25);
+        setAsDefault.setBounds(10, 110, 225, 25);
+        defaultDimensions.setBounds(215, 17, 20, 20);
+        defaultDimensions.setForeground(clr2);
+        defaultMinesCount.setBounds(215, 47, 20, 20);
+        defaultMinesCount.setForeground(clr2);
         gridDimensions.setBounds(5, 15, 135, 20);
         gridDimensionsBox.setBounds(140, 17, 70, 20);
         minesCount.setBounds(5, 45, 50, 20);
@@ -607,7 +690,15 @@ public class MineSweeperGUI extends JFrame implements Runnable, ActionListener, 
         frame.add(gridDimensionsBox);
         frame.add(minesCount);
         frame.add(minesBox);
-        frame.add(OK);
+        frame.add(startButton);
+        frame.add(defaultGame);
+        frame.add(setAsDefault);
+        frame.add(defaultDimensions);
+        frame.add(defaultMinesCount);
         frame.setVisible(true);
+    }
+
+    private boolean isValid(int numOfMines, int dimensions) {
+        return !(numOfMines >= (dimensions * dimensions) - 4);
     }
 }
